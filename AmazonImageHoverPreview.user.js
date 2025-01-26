@@ -6,6 +6,8 @@
 // @author       Cengaver
 // @icon         https://www.google.com/s2/favicons?domain=amazon.com
 // @match        https://sellercentral.amazon.com/opportunity-explorer/search*
+// @downloadURL  https://github.com/cengaver/AmazonScript/raw/refs/heads/main/AmazonImageHoverPreview.user.js
+// @updateURL    https://github.com/cengaver/AmazonScript/raw/refs/heads/main/AmazonImageHoverPreview.user.js
 // @grant        GM_addStyle
 // ==/UserScript==
 
