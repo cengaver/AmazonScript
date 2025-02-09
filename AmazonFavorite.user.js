@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Amazon Favotite
+// @name         Amazon Favorite
 // @namespace    https://github.com/cengaver
-// @version      0.23
+// @version      0.24
 // @description  Fvorite list a product on Amazon.
 // @author       Cengaver
 // @match        https://www.amazon.com/dp/*
@@ -283,7 +283,9 @@
             onload: function(response) {
                 if (response.status === 200) {
                     const data = JSON.parse(response.responseText);
-                    const processedData = data.values.map(row => ({
+                    const processedData = data.values
+                    .filter(row => row[0] != null && row[0] !== '') // row[0] boş değilse devam et
+                    .map(row => ({
                         id: row[row.length - 1], // AD sütunu (son sütun)
                         dnoValue: row[0], // E sütunu (ilk sütun)
                     }));
@@ -405,18 +407,19 @@
     }
 
     function addHeartsProduct() {
-        const listingDateElement = document.querySelector('#detailBullets_feature_div > ul > li:nth-child(3) > span > span:nth-child(2)');
-        const date = listingDateElement ? listingDateElement.textContent.trim() : '';
+        const details = document.querySelector("#detailBulletsWrapper_feature_div");
+        // Date First Available
+        const dateAvailableElement = [...details.querySelectorAll("li")]
+        .find(el => el.textContent.includes("Date First Available"));
+        const dateAvailable = dateAvailableElement ? dateAvailableElement.innerText.split(":").pop().trim() : null;
 
-        const bestsellerrankElement = document.querySelector("#detailBulletsWrapper_feature_div > ul:nth-child(4) > li > span");
-        let rank = 0;
-        if (bestsellerrankElement) {
-            const bestsellerrankText = bestsellerrankElement.textContent.trim();
-            const match = bestsellerrankText.match(/#([\d,]+)/);
-            rank = match ? parseInt(match[1].replace(/,/g, '')) : null;
-            console.log(rank); // Çıktı: 17525
-        }
+        const bestSellerText = [...details.querySelectorAll("li")].find(el => el.textContent.includes("Best Sellers Rank"))?.textContent;
+        const bestSellerRank = bestSellerText?.match(/#([\d,]+)/)?.[1];
 
+        console.log("Date First Available:", dateAvailable);
+        console.log("Best Sellers Rank:", bestSellerRank);
+
+        const rank = parseInt(bestSellerRank.replace(/,/g, ''));
         const listingTitleElement = document.querySelector('#productTitle');
         const title = listingTitleElement.textContent.trim();
 
@@ -425,8 +428,8 @@
         ${listingTitleElement.textContent}<br><hr><div class="wt-bg-turquoise-tint wt-text-gray wt-text-caption wt-pt-xs-1 wt-pb-xs-1">${title}</div>
     `;
 
-        if (date) {
-            console.log("Listing Date: " + date);
+        if (dateAvailable) {
+            console.log("Listing Date: " + dateAvailable);
         }
 
         const reviewItemElement = document.querySelector("#acrCustomerReviewText");
@@ -451,18 +454,19 @@
             console.log("Asin ID:", asin);
         }
 
-        let age = daysSince(date);
+        let age = daysSince(dateAvailable);
         let url = simplifyAmazonUrl(asin);
         const heart = createHeartIcon(asin, url, title, img, rank, age);
 
         const balloonDiv = document.createElement("div");
         balloonDiv.setAttribute("id", "InfoBalloon");
         balloonDiv.innerHTML = `
-        <div style="position: fixed; top: 60px; left: 90%; transform: translateX(-50%); background-color: yellow; border: 1px solid #ccc; border-radius: 5px; padding: 10px; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); z-index: 9999;">
+        <div>
             Rank: ${rank}
             ${review}
-            <p style="margin: 0;">${date}</p>
-            <p style="margin: 0;">Days Ago: ${daysSince(date)}</p>
+            ${asin}
+            <p style="margin: 0;">${dateAvailable}</p>
+            <p style="margin: 0;">Days Ago: ${daysSince(dateAvailable)}</p>
             <button id="copy">Copy</button>
         </div>
     `;
@@ -482,7 +486,7 @@
     const observer = new MutationObserver(mutations => {
         mutations.forEach(mutation => {
             if (mutation.addedNodes.length) {
-                if (window.location.href.includes("amazon.com/dp/")) {
+                if (window.location.href.includes("/dp/")) {
                     //addHeartsProduct();
                 } else {
                     addHearts();
@@ -494,13 +498,24 @@
     observer.observe(document.body, { childList: true, subtree: true });
     await fetchColumnData();
     // Initial call based on the current page
-    if (window.location.href.includes("amazon.com/dp/")) {
+    if (window.location.href.includes("/dp/")) {
+        console.log("addHeartsProduct start dp");
         addHeartsProduct();
     } else {
         addHearts();
     }
-
     GM_addStyle(`
+  #InfoBalloon {
+   position: fixed;
+   top: 60px; left: 90%;
+   transform: translateX(-50%);
+   background-color: yellow;
+   border: 1px solid #ccc;
+   border-radius: 5px;
+   padding: 10px;
+   box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+   z-index: 9999;
+  }
   .heart-icon {
     cursor: pointer;
     color: red;
