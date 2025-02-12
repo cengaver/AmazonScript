@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Amazon Favorite
 // @namespace    https://github.com/cengaver
-// @version      0.24
+// @version      0.25
 // @description  Fvorite list a product on Amazon.
 // @author       Cengaver
 // @match        https://www.amazon.com/dp/*
@@ -375,7 +375,7 @@
             heart.style.cursor = "pointer";
             heart.addEventListener("click", async () => {
                 heart.style.backgroundColor = "orange";
-                console.log(asin, url, title, img, rank, age);
+                //console.log(asin, url, title, img, rank, age);
                 await saveToGoogleSheet(url, title, img, rank, age, null);
                 heart.textContent = "❤️";
                 heart.style.backgroundColor = null;
@@ -416,8 +416,8 @@
         const bestSellerText = [...details.querySelectorAll("li")].find(el => el.textContent.includes("Best Sellers Rank"))?.textContent;
         const bestSellerRank = bestSellerText?.match(/#([\d,]+)/)?.[1];
 
-        console.log("Date First Available:", dateAvailable);
-        console.log("Best Sellers Rank:", bestSellerRank);
+        //console.log("Date First Available:", dateAvailable);
+        //console.log("Best Sellers Rank:", bestSellerRank);
 
         const rank = parseInt(bestSellerRank.replace(/,/g, ''));
         const listingTitleElement = document.querySelector('#productTitle');
@@ -429,7 +429,7 @@
     `;
 
         if (dateAvailable) {
-            console.log("Listing Date: " + dateAvailable);
+            //console.log("Listing Date: " + dateAvailable);
         }
 
         const reviewItemElement = document.querySelector("#acrCustomerReviewText");
@@ -440,20 +440,17 @@
                 reviewCount = "★" + reviewCount;
             }
             review = '<p style="margin: 0;">Rev : ' + reviewCount + ' </p>';
-            console.log("ReviewItem: " + reviewCount);
+            //console.log("ReviewItem: " + reviewCount);
         }
 
         const imgElement = document.querySelector('#imgTagWrapperId img');
         const img = imgElement ? imgElement.src : null;
-        console.log(img);
-
-        const AsinElement = document.querySelector("#ASIN");
-        let asin;
-        if (AsinElement) {
-            asin = AsinElement.value;
-            console.log("Asin ID:", asin);
-        }
-
+        //console.log(img);
+        var averageCustomerReviewsDiv = document.getElementById('averageCustomerReviews');
+        var dataAsin = averageCustomerReviewsDiv ? averageCustomerReviewsDiv.getAttribute('data-asin'):null;
+        //console.log("dataAsin1:",dataAsin);
+        const asin = dataAsin ? dataAsin : document.querySelector("#ASIN").value;
+        //console.log("asin2:",asin);
         let age = daysSince(dateAvailable);
         let url = simplifyAmazonUrl(asin);
         const heart = createHeartIcon(asin, url, title, img, rank, age);
@@ -499,7 +496,7 @@
     await fetchColumnData();
     // Initial call based on the current page
     if (window.location.href.includes("/dp/")) {
-        console.log("addHeartsProduct start dp");
+        //console.log("addHeartsProduct start dp");
         addHeartsProduct();
     } else {
         addHearts();
