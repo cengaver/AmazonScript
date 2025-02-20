@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Amazon Favorite
 // @namespace    https://github.com/cengaver
-// @version      0.25
+// @version      1.01
 // @description  Fvorite list a product on Amazon.
 // @author       Cengaver
 // @match        https://www.amazon.com/dp/*
@@ -28,6 +28,7 @@
 
     const getApiConfig = async () => {
         const sheetId = await GM.getValue('sheetId', '');
+        const sheetId2 = await GM.getValue('sheetId2', '');
         const range = await GM.getValue('range', 'Liste!E:AD');
         const rangeLink = await GM.getValue('rangeLink', '');
         const privateKey = await GM.getValue('privateKey', '');
@@ -38,7 +39,7 @@
                 alert("sheetId ayarlanmamış.");
                 return null;
             }
-             return { sheetId, range, rangeLink, privateKey, clientEmail, team };
+             return { sheetId, sheetId2, range, rangeLink, privateKey, clientEmail, team };
         } catch (e) {
             alert("Bilgiler uygun değil!");
             return null;
@@ -48,7 +49,7 @@
     const config = await getApiConfig();
     if (!config) return;
 
-    const { sheetId, range, rangeLink, privateKey, clientEmail, team } = config;
+    const { sheetId, sheetId2, range, rangeLink, privateKey, clientEmail, team } = config;
 
     const tokenUri = "https://oauth2.googleapis.com/token";
 
@@ -148,16 +149,15 @@
     }
 
     // Google Sheets'e link ekle
-    async function saveToGoogleSheet(link, title, img, sales, age, tag) {
-        //const rangeLink = "Liste!F:F"; // Eklenecek sütun
+    async function saveToGoogleSheet(sheet, link, title, img, sales, age, tag) {
         const accessToken = await getAccessToken();
-        const tags = tag ? tag.join(", ") : null;
+        //const tags = tag.join(", ");
         // 1. Mevcut son dolu satırı bul
         let linkAlreadyExists = false;
         let lastRow = 0;
         await GM.xmlHttpRequest({
             method: "GET",
-            url: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${rangeLink}?majorDimension=COLUMNS`,
+            url: `https://sheets.googleapis.com/v4/spreadsheets/${sheet}/values/${rangeLink}?majorDimension=COLUMNS`,
             headers: {
                 "Authorization": `Bearer ${accessToken}`
             },
@@ -203,7 +203,7 @@
                         img,
                         title,
                         null,
-                        tags,
+                        null,
                         sales,
                         age
                     ]
@@ -221,7 +221,7 @@
                         null,
                         team,
                         null,
-                        tags,
+                        null,
                         null,
                         null,
                         sales,
@@ -233,7 +233,7 @@
 
         await GM.xmlHttpRequest({
             method: "PUT",
-            url: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${body.range}?valueInputOption=RAW`,
+            url: `https://sheets.googleapis.com/v4/spreadsheets/${sheet}/values/${body.range}?valueInputOption=RAW`,
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${accessToken}`
@@ -253,12 +253,24 @@
         });
     }
 
-    // Google Sheets ve eRank işlemleri için aynı kodları kullandım.
-    const fetchColumnData = async () => {
-        const cacheKey = 'cachedData';
+   // Google Sheets ve eRank işlemleri için aynı kodları kullandım.
+    const fetchColumnData = async (sID=null) => {
+        const config = await getApiConfig();
+        if (!config) return;
+
+        const { sheetId, sheetId2, range } = config;
+        let cacheKey;
+        let sheet;
+        if(sID && sheetId2){
+            cacheKey = 'cachedData2';
+            sheet = sheetId2;
+        }else{
+            cacheKey = 'cachedData';
+            sheet = sheetId;
+        }
         const cacheTimestampKey = `${cacheKey}_timestamp`;
         const now = Date.now();
-
+        //console.log("cacheKeyFetch",cacheKey);
         const cachedData = JSON.parse(localStorage.getItem(cacheKey));
         const cacheTimestamp = localStorage.getItem(cacheTimestampKey);
 
@@ -267,16 +279,11 @@
         }
         if (cachedData) { localStorage.removeItem(cacheKey) }
 
-        const config = await getApiConfig();
-        if (!config) return;
-
-        const { sheetId, range } = config;
-
         const accessToken = await getAccessToken();
 
         await GM.xmlHttpRequest({
             method: "GET",
-            url: `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`,
+            url: `https://sheets.googleapis.com/v4/spreadsheets/${sheet}/values/${range}`,
             headers: {
                 "Authorization": `Bearer ${accessToken}`
             },
@@ -288,6 +295,7 @@
                     .map(row => ({
                         id: row[row.length - 1], // AD sütunu (son sütun)
                         dnoValue: row[0], // E sütunu (ilk sütun)
+                        gDrive: row[row.length - 3], // AB gDrive serach
                     }));
                     localStorage.setItem(cacheKey, JSON.stringify(processedData));
                     localStorage.setItem(cacheTimestampKey, now.toString());
@@ -302,10 +310,20 @@
         });
     };
 
-    const findEValueById = (id) => {
-        const cachedData = JSON.parse(localStorage.getItem('cachedData')) || [];
+    const findEValueById = (id,sID=null) => {
+        let cacheKey;
+        if(sID){
+            cacheKey = 'cachedData2';
+        }else{
+            cacheKey = 'cachedData';
+        }
+        //console.log("cacheKeyFind",cacheKey);
+        const cachedData = JSON.parse(localStorage.getItem(cacheKey)) || [];
         const match = cachedData.find(row => row.id === id);
-        return match ? match.dnoValue : null;
+        const dnoValue = match ? match.dnoValue : null;
+        const gDrive = match ? match.gDrive : null;
+        console.log("dnoValue",dnoValue);
+        return {dnoValue, gDrive};
     };
 
     function simplifyAmazonUrl(asin) {
@@ -367,21 +385,54 @@
     }
 
     function createHeartIcon(asin, url, title, img, rank, age) {
+        let {dnoValue, gDrive} = findEValueById(asin) || ""; // Eğer değer bulunmazsa boş string
+        const heartWrapper = document.createElement('div');
         const heart = document.createElement('span');
         heart.className = 'heart-icon';
-        heart.innerHTML = findEValueById(asin) ? "❤️" : "🤍";
-        heart.title = findEValueById(asin) ? `Design NO: ${findEValueById(asin)}` : `Add to List!`;
-        if (!findEValueById(asin)) {
+        heart.innerHTML = dnoValue ? "❤️" : "🤍";
+        heart.title = dnoValue ? `Design NO: ${dnoValue}` : `Add to List!`;
+        if (!dnoValue) {
             heart.style.cursor = "pointer";
             heart.addEventListener("click", async () => {
                 heart.style.backgroundColor = "orange";
                 //console.log(asin, url, title, img, rank, age);
-                await saveToGoogleSheet(url, title, img, rank, age, null);
+                await saveToGoogleSheet(sheetId,url, title, img, rank, age, null);
                 heart.textContent = "❤️";
                 heart.style.backgroundColor = null;
             });
+        }else if (gDrive) {
+            heart.addEventListener("click", async function() {
+                window.open(gDrive, "_blank");
+            });
         }
-        return heart;
+
+        heartWrapper.appendChild(heart);
+
+        if(sheetId2){
+            let {dnoValue, gDrive} = findEValueById(asin,2) || ""; // Eğer değer bulunmazsa boş string
+            console.log("dnoValue2",dnoValue);
+            const heart2 = document.createElement('span');
+            heart2.className = 'heart-icon';
+            heart2.innerHTML = dnoValue ? "|✅" : "|⭐";
+            heart2.title = dnoValue ? `Design NO: ${dnoValue}` : `İstek Yap!`;
+            if (!dnoValue) {
+                heart2.style.cursor = "pointer";
+                heart2.addEventListener("click", async () => {
+                    heart2.style.backgroundColor = "orange";
+                    //console.log(asin, url, title, img, rank, age);
+                    await saveToGoogleSheet(sheetId2,url, title, img, rank, age, null);
+                    heart2.textContent = "✅";
+                    heart2.style.backgroundColor = null;
+                });
+            }else if (gDrive) {
+                heart2.addEventListener("click", async function() {
+                    window.open(gDrive, "_blank");
+                });
+            }
+            heartWrapper.appendChild(heart2);
+        }
+
+        return heartWrapper;
     }
 
     function addHearts() {
@@ -494,6 +545,9 @@
 
     observer.observe(document.body, { childList: true, subtree: true });
     await fetchColumnData();
+    if(sheetId2!==""){
+        await fetchColumnData(2);
+    }
     // Initial call based on the current page
     if (window.location.href.includes("/dp/")) {
         //console.log("addHeartsProduct start dp");
