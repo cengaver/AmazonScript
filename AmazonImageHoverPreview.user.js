@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Amazon Image Hover Preview
 // @namespace    https://github.com/cengaver
-// @version      1.41
+// @version      1.42
 // @description  show large image preview on hover, supports lazy-loaded images
 // @author       Cengaver
 // @icon         https://www.google.com/s2/favicons?domain=amazon.com
@@ -55,16 +55,21 @@ GM_addStyle(`
 
     document.addEventListener('mouseover', (event) => {
         const target = event.target;
+        let largeImgUrl ;
         if ( target.tagName === 'IMG' && target.src.includes('_SS40_') ) {
-            const largeImgUrl = target.src.replace('_SS40_', '_SS250_');
+            largeImgUrl = target.src.replace('_SS40_', '_SS250_');
             showPreview(event, largeImgUrl);
         } else if ( target.tagName === 'IMG' && target.src.includes('_AC_UL') ) {
-            let largeImgUrl = target.src.replace('UL600_SR600,400', 'UL900_SR900,800');
+            largeImgUrl = target.src.replace('UL600_SR600,400', 'UL900_SR900,800');
             largeImgUrl = largeImgUrl.replace('UL300_SR300,200', 'UL900_SR900,800');
             largeImgUrl = largeImgUrl.replace('UL165_SR165,165', 'UL900_SR900,800');
             largeImgUrl = largeImgUrl.replace('UL100_SR100,100', 'UL900_SR900,800');
             showPreview(event, largeImgUrl);
+        }else if ( target.tagName === 'IMG' && target.src.includes('_SR37') ) {
+            largeImgUrl = target.src.replace('SR37,37', 'SR600,500');
+            showPreview(event, largeImgUrl);
         }
+
     });
 
     document.addEventListener('mousemove', (e) => {
