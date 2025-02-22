@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Amazon Favorite
 // @namespace    https://github.com/cengaver
-// @version      1.01
+// @version      1.2
 // @description  Fvorite list a product on Amazon.
 // @author       Cengaver
 // @match        https://www.amazon.com/dp/*
@@ -391,16 +391,18 @@
         heart.className = 'heart-icon';
         heart.innerHTML = dnoValue ? "❤️" : "🤍";
         heart.title = dnoValue ? `Design NO: ${dnoValue}` : `Add to List!`;
+        heart.style.cursor = "no-drop";
         if (!dnoValue) {
             heart.style.cursor = "pointer";
             heart.addEventListener("click", async () => {
                 heart.style.backgroundColor = "orange";
                 //console.log(asin, url, title, img, rank, age);
                 await saveToGoogleSheet(sheetId,url, title, img, rank, age, null);
-                heart.textContent = "❤️";
+                heart.textContent = "🤍";
                 heart.style.backgroundColor = null;
             });
         }else if (gDrive) {
+            heart.style.cursor = "alias";
             heart.addEventListener("click", async function() {
                 window.open(gDrive, "_blank");
             });
@@ -415,16 +417,18 @@
             heart2.className = 'heart-icon';
             heart2.innerHTML = dnoValue ? "|✅" : "|⭐";
             heart2.title = dnoValue ? `Design NO: ${dnoValue}` : `İstek Yap!`;
+            heart2.style.cursor = "no-drop";
             if (!dnoValue) {
                 heart2.style.cursor = "pointer";
                 heart2.addEventListener("click", async () => {
                     heart2.style.backgroundColor = "orange";
                     //console.log(asin, url, title, img, rank, age);
                     await saveToGoogleSheet(sheetId2,url, title, img, rank, age, null);
-                    heart2.textContent = "✅";
+                    heart2.textContent = "⭐";
                     heart2.style.backgroundColor = null;
                 });
             }else if (gDrive) {
+                heart2.style.cursor = "alias";
                 heart2.addEventListener("click", async function() {
                     window.open(gDrive, "_blank");
                 });
@@ -475,9 +479,9 @@
         const title = listingTitleElement.textContent.trim();
 
         // title and tag text includen sheet
-        listingTitleElement.innerHTML = `
+       /* listingTitleElement.innerHTML = `
         ${listingTitleElement.textContent}<br><hr><div class="wt-bg-turquoise-tint wt-text-gray wt-text-caption wt-pt-xs-1 wt-pb-xs-1">${title}</div>
-    `;
+    `;*/
 
         if (dateAvailable) {
             //console.log("Listing Date: " + dateAvailable);
@@ -568,7 +572,7 @@
    z-index: 9999;
   }
   .heart-icon {
-    cursor: pointer;
+    /*cursor: pointer;*/
     color: red;
     margin-left: 5px;
   }
