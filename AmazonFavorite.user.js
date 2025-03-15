@@ -1,17 +1,20 @@
 // ==UserScript==
 // @name         Amazon Favorite
 // @namespace    https://github.com/cengaver
-// @version      1.2
+// @version      1.23
 // @description  Fvorite list a product on Amazon.
 // @author       Cengaver
 // @match        https://www.amazon.com/dp/*
 // @match        https://www.amazon.com/*/dp/*
 // @match        https://sellercentral.amazon.com/opportunity-explorer/niche/*
+// @match        *://app.podly.co/*
+// @include      *://app.podly.co/#/search/product-details/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @grant        GM.registerMenuCommand
 // @grant        GM.getValue
 // @grant        GM.setValue
+// @run-at       document-idle
 // @connect      sheets.googleapis.com
 // @icon         https://www.google.com/s2/favicons?domain=amazon.com
 // @downloadURL  https://github.com/cengaver/AmazonScript/raw/refs/heads/main/AmazonFavorite.user.js
@@ -149,7 +152,7 @@
     }
 
     // Google Sheets'e link ekle
-    async function saveToGoogleSheet(sheet, link, title, img, sales, age, tag) {
+    async function saveToGoogleSheet(sheet, link, title, img, rank, age, tag, sales) {
         const accessToken = await getAccessToken();
         //const tags = tag.join(", ");
         // 1. Mevcut son dolu satırı bul
@@ -197,37 +200,13 @@
             body = {
                 range: `Liste!D${newRow}:J${newRow}`,
                 majorDimension: "ROWS",
-                values: [
-                    [
-                        link,
-                        img,
-                        title,
-                        null,
-                        null,
-                        sales,
-                        age
-                    ]
-                ]
+                values: [[link, img, title, tag, sales, rank, age]]
             };
         } else {
             body = {
                 range: `Liste!F${newRow}:P${newRow}`,
                 majorDimension: "ROWS",
-                values: [
-                    [
-                        link,
-                        img,
-                        title,
-                        null,
-                        team,
-                        null,
-                        null,
-                        null,
-                        null,
-                        sales,
-                        age
-                    ]
-                ]
+                values: [[link, img, title, null, team, null, tag, null, sales, rank, age]]
             };
         }
 
@@ -322,7 +301,7 @@
         const match = cachedData.find(row => row.id === id);
         const dnoValue = match ? match.dnoValue : null;
         const gDrive = match ? match.gDrive : null;
-        console.log("dnoValue",dnoValue);
+        //console.log("dnoValue",dnoValue);
         return {dnoValue, gDrive};
     };
 
@@ -361,6 +340,11 @@
     }
 
     function daysSince(str) {
+        if(str.length<8){
+            const myArray = str.split("/");
+            str = myArray[0] + '/1/' + myArray[1]
+        }
+        //console.log("str: ", str);
         const startDate = new Date(str);
         const today = new Date();
         const timeDifference = today - startDate; // Zaman farkı milisaniye cinsinden
@@ -384,7 +368,11 @@
         return parseFloat(commaSeparatedNumber.replace(',', '.'));
     }
 
-    function createHeartIcon(asin, url, title, img, rank, age) {
+    function removeDuplicateTags(tagString) {
+        return [...new Set(tagString.split(',').map(tag => tag.trim()))].join(', ');
+    }
+
+    function createHeartIcon(asin, url, title, img, rank, age, tag, sales) {
         let {dnoValue, gDrive} = findEValueById(asin) || ""; // Eğer değer bulunmazsa boş string
         const heartWrapper = document.createElement('div');
         const heart = document.createElement('span');
@@ -397,8 +385,8 @@
             heart.addEventListener("click", async () => {
                 heart.style.backgroundColor = "orange";
                 //console.log(asin, url, title, img, rank, age);
-                await saveToGoogleSheet(sheetId,url, title, img, rank, age, null);
-                heart.textContent = "🤍";
+                await saveToGoogleSheet(sheetId,url, title, img, rank, age, tag, sales);
+                heart.textContent = "❤️";
                 heart.style.backgroundColor = null;
             });
         }else if (gDrive) {
@@ -412,19 +400,19 @@
 
         if(sheetId2){
             let {dnoValue, gDrive} = findEValueById(asin,2) || ""; // Eğer değer bulunmazsa boş string
-            console.log("dnoValue2",dnoValue);
+            //console.log("dnoValue2",dnoValue);
             const heart2 = document.createElement('span');
             heart2.className = 'heart-icon';
             heart2.innerHTML = dnoValue ? "|✅" : "|⭐";
-            heart2.title = dnoValue ? `Design NO: ${dnoValue}` : `İstek Yap!`;
+            heart2.title = dnoValue ? `İstek NO: ${dnoValue}` : `İstek Yap!`;
             heart2.style.cursor = "no-drop";
             if (!dnoValue) {
                 heart2.style.cursor = "pointer";
                 heart2.addEventListener("click", async () => {
                     heart2.style.backgroundColor = "orange";
                     //console.log(asin, url, title, img, rank, age);
-                    await saveToGoogleSheet(sheetId2,url, title, img, rank, age, null);
-                    heart2.textContent = "⭐";
+                    await saveToGoogleSheet(sheetId2,url, title, img, rank, age, tag, sales);
+                    heart2.textContent = "✅";
                     heart2.style.backgroundColor = null;
                 });
             }else if (gDrive) {
@@ -454,8 +442,9 @@
                 let date = dateElement[index].textContent.trim();
                 let rank = convertToNumber(rankElement[index].textContent.trim());
                 let age = daysSince(date);
+                //console.log(date, age);
                 let url = simplifyAmazonUrl(asin);
-                const heart = createHeartIcon(asin, url, title, img, rank, age);
+                const heart = createHeartIcon(asin, url, title, img, rank, age, null, null);
                 cell.appendChild(heart);
             }
         });
@@ -471,21 +460,9 @@
         const bestSellerText = [...details.querySelectorAll("li")].find(el => el.textContent.includes("Best Sellers Rank"))?.textContent;
         const bestSellerRank = bestSellerText?.match(/#([\d,]+)/)?.[1];
 
-        //console.log("Date First Available:", dateAvailable);
-        //console.log("Best Sellers Rank:", bestSellerRank);
-
         const rank = parseInt(bestSellerRank.replace(/,/g, ''));
         const listingTitleElement = document.querySelector('#productTitle');
         const title = listingTitleElement.textContent.trim();
-
-        // title and tag text includen sheet
-       /* listingTitleElement.innerHTML = `
-        ${listingTitleElement.textContent}<br><hr><div class="wt-bg-turquoise-tint wt-text-gray wt-text-caption wt-pt-xs-1 wt-pb-xs-1">${title}</div>
-    `;*/
-
-        if (dateAvailable) {
-            //console.log("Listing Date: " + dateAvailable);
-        }
 
         const reviewItemElement = document.querySelector("#acrCustomerReviewText");
         let review = "";
@@ -495,7 +472,6 @@
                 reviewCount = "★" + reviewCount;
             }
             review = '<p style="margin: 0;">Rev : ' + reviewCount + ' </p>';
-            //console.log("ReviewItem: " + reviewCount);
         }
 
         const imgElement = document.querySelector('#imgTagWrapperId img');
@@ -503,12 +479,10 @@
         //console.log(img);
         var averageCustomerReviewsDiv = document.getElementById('averageCustomerReviews');
         var dataAsin = averageCustomerReviewsDiv ? averageCustomerReviewsDiv.getAttribute('data-asin'):null;
-        //console.log("dataAsin1:",dataAsin);
         const asin = dataAsin ? dataAsin : document.querySelector("#ASIN").value;
-        //console.log("asin2:",asin);
         let age = daysSince(dateAvailable);
         let url = simplifyAmazonUrl(asin);
-        const heart = createHeartIcon(asin, url, title, img, rank, age);
+        const heart = createHeartIcon(asin, url, title, img, rank, age, null, null);
 
         const balloonDiv = document.createElement("div");
         balloonDiv.setAttribute("id", "InfoBalloon");
@@ -516,6 +490,52 @@
         <div>
             Rank: ${rank}
             ${review}
+            ${asin}
+            <p style="margin: 0;">${dateAvailable}</p>
+            <p style="margin: 0;">Days Ago: ${daysSince(dateAvailable)}</p>
+            <button id="copy">Copy</button>
+        </div>
+    `;
+
+        // heart öğesini balloonDiv içine ekleyin
+        balloonDiv.querySelector('div').appendChild(heart);
+
+        document.body.appendChild(balloonDiv);
+
+        document.getElementById("copy").onclick = function () {
+            copyText("Asin ID:" + asin + "\n" + title + "\n");
+            console.log("Text copied to clipboard:\nListing ID:" + asin + "\n" + title + "\n");
+        };
+    }
+
+
+    function addHeartsPodly() {
+        const bestSellerRank = document.querySelector("#ProductDetails > div:nth-child(1) > div > div.w-full.pt-1\\.5.pl-6.middleBar > div.flex.justify-between.mt-4.min-h-20.dark\\:text-gray-30 > div:nth-child(3) > div.flex.mt-1 > div").textContent.trim();
+        const rank = parseInt(bestSellerRank.replace(/,/g, '').replace('#', ''));
+        //console.log("rank: ", rank);
+        const title = document.querySelector("#ProductDetails > div:nth-child(1) > div > div.w-full.pt-1\\.5.pl-6.middleBar > div.hidden.text-xl.text-gray-90.dark\\:text-white.sm\\:block > div > div").textContent.trim();
+        //console.log("title: ", title);
+        const imgElement = document.querySelector(".pd-img");
+        const img = imgElement ? imgElement.src : null;
+        //console.log(img);
+        const sales = document.querySelector("#ProductDetails > div:nth-child(1) > div > div.w-full.pt-1\\.5.pl-6.middleBar > div.flex.justify-between.mt-6.dark\\:text-gray-30 > div:nth-child(5) > div > div.ml-1.dark\\:text-purple-10.small-fs").textContent;
+        //console.log("salesElement: ",sales);
+        const dateAvailable = document.querySelector("#ProductDetails > div:nth-child(1) > div > div.w-full.pt-1\\.5.pl-6.middleBar > div.flex.justify-between.mt-4.min-h-20.dark\\:text-gray-30 > div:nth-child(2) > div.flex.mt-1 > div").textContent;
+        var asin = document.querySelector("#ProductDetails > div:nth-child(1) > div > div.w-full.pt-1\\.5.pl-6.middleBar > div.flex.justify-between.mt-4.min-h-20.dark\\:text-gray-30 > div:nth-child(1) > div.mt-1.small-fs.text-gray-40").textContent;
+        //console.log("dataAsin1:",asin);
+        const tags = Array.from(document.querySelectorAll('.keywords .Tag span')).map(tag => tag.textContent).join(',');
+        const tag =removeDuplicateTags(tags);
+        console.log("tags: ",tag);
+
+        let age = daysSince(dateAvailable);
+        let url = simplifyAmazonUrl(asin);
+        const heart = createHeartIcon(asin, url, title, img, rank, age, tag, sales);
+
+        const balloonDiv = document.createElement("div");
+        balloonDiv.setAttribute("id", "InfoBalloon");
+        balloonDiv.innerHTML = `
+        <div>
+            Rank: ${rank}
             ${asin}
             <p style="margin: 0;">${dateAvailable}</p>
             <p style="margin: 0;">Days Ago: ${daysSince(dateAvailable)}</p>
@@ -552,19 +572,22 @@
     if(sheetId2!==""){
         await fetchColumnData(2);
     }
+
     // Initial call based on the current page
     if (window.location.href.includes("/dp/")) {
-        //console.log("addHeartsProduct start dp");
         addHeartsProduct();
+    }else if (window.location.href.includes("podly")) {
+        addHeartsPodly();
     } else {
         addHearts();
     }
+
     GM_addStyle(`
   #InfoBalloon {
    position: fixed;
    top: 60px; left: 90%;
    transform: translateX(-50%);
-   background-color: yellow;
+   background-color: navy;
    border: 1px solid #ccc;
    border-radius: 5px;
    padding: 10px;
