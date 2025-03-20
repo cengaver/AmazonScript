@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Amazon Favorite
 // @namespace    https://github.com/cengaver
-// @version      1.23
+// @version      1.25
 // @description  Fvorite list a product on Amazon.
 // @author       Cengaver
 // @match        https://www.amazon.com/dp/*
@@ -352,6 +352,19 @@
         return daysDifference;
     }
 
+    // Using fetch
+    async function downloadImage(imageSrc, title) {
+        const image = await fetch(imageSrc)
+        const imageBlog = await image.blob()
+        const imageURL = URL.createObjectURL(imageBlog)
+
+        const link = document.createElement('a')
+        link.href = imageURL
+        link.download = title
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+    }
     // Copy a specified text to clipboard
     function copyText(textToCopy) {
         navigator.clipboard.writeText(textToCopy)
@@ -493,7 +506,8 @@
             ${asin}
             <p style="margin: 0;">${dateAvailable}</p>
             <p style="margin: 0;">Days Ago: ${daysSince(dateAvailable)}</p>
-            <button id="copy">Copy</button>
+            <button id="copy">Copy🗒️</button>
+            <button title="Download Image" id="imgdownload">Img 🖼️</button>
         </div>
     `;
 
@@ -501,7 +515,9 @@
         balloonDiv.querySelector('div').appendChild(heart);
 
         document.body.appendChild(balloonDiv);
-
+        document.getElementById("imgdownload").onclick = function () {
+            downloadImage(img,title);
+        };
         document.getElementById("copy").onclick = function () {
             copyText("Asin ID:" + asin + "\n" + title + "\n");
             console.log("Text copied to clipboard:\nListing ID:" + asin + "\n" + title + "\n");
@@ -539,7 +555,8 @@
             ${asin}
             <p style="margin: 0;">${dateAvailable}</p>
             <p style="margin: 0;">Days Ago: ${daysSince(dateAvailable)}</p>
-            <button id="copy">Copy</button>
+            <button id="copy">Copy🗒️</button>
+            <button title="Download Image" id="imgdownload">Img 🖼️</button>
         </div>
     `;
 
@@ -547,7 +564,9 @@
         balloonDiv.querySelector('div').appendChild(heart);
 
         document.body.appendChild(balloonDiv);
-
+        document.getElementById("imgdownload").onclick = function () {
+            downloadImage(img,title);
+        };
         document.getElementById("copy").onclick = function () {
             copyText("Asin ID:" + asin + "\n" + title + "\n");
             console.log("Text copied to clipboard:\nListing ID:" + asin + "\n" + title + "\n");
@@ -587,7 +606,8 @@
    position: fixed;
    top: 60px; left: 90%;
    transform: translateX(-50%);
-   background-color: navy;
+   background-color: #d6ff00;
+   color: black;
    border: 1px solid #ccc;
    border-radius: 5px;
    padding: 10px;
