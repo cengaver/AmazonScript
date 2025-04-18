@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Amazon Favorite
 // @namespace    https://github.com/cengaver
-// @version      1.25
+// @version      1.31
 // @description  Fvorite list a product on Amazon.
 // @author       Cengaver
 // @match        https://www.amazon.com/dp/*
@@ -9,13 +9,13 @@
 // @match        https://sellercentral.amazon.com/opportunity-explorer/niche/*
 // @match        *://app.podly.co/*
 // @include      *://app.podly.co/#/search/product-details/*
-// @grant        GM_xmlhttpRequest
-// @grant        GM_addStyle
+// @connect      sheets.googleapis.com
+// @grant        GM.addStyle
 // @grant        GM.registerMenuCommand
+// @grant        GM.xmlHttpRequest
 // @grant        GM.getValue
 // @grant        GM.setValue
 // @run-at       document-idle
-// @connect      sheets.googleapis.com
 // @icon         https://www.google.com/s2/favicons?domain=amazon.com
 // @downloadURL  https://github.com/cengaver/AmazonScript/raw/refs/heads/main/AmazonFavorite.user.js
 // @updateURL    https://github.com/cengaver/AmazonScript/raw/refs/heads/main/AmazonFavorite.user.js
@@ -177,6 +177,7 @@
                         lastRow = data.values[0].length; // En son dolu satır sayısını al
                     }
                 } else {
+                    showToast("Veri alınırken hata oluştu:",'error');
                     console.error("Veri alınırken hata oluştu:", response.responseText);
                 }
             },
@@ -280,6 +281,7 @@
                     localStorage.setItem(cacheTimestampKey, now.toString());
                     return { processedData };
                 } else {
+                    showToast("Veri alınırken hata oluştu:",'error');
                     console.error("Veri alınırken hata oluştu:", response.responseText);
                 }
             },
@@ -400,6 +402,7 @@
                 //console.log(asin, url, title, img, rank, age);
                 await saveToGoogleSheet(sheetId,url, title, img, rank, age, tag, sales);
                 heart.textContent = "❤️";
+                showToast(asin + '\n Başarıyla Eklendi');
                 heart.style.backgroundColor = null;
             });
         }else if (gDrive) {
@@ -426,6 +429,7 @@
                     //console.log(asin, url, title, img, rank, age);
                     await saveToGoogleSheet(sheetId2,url, title, img, rank, age, tag, sales);
                     heart2.textContent = "✅";
+                    showToast(asin + '\n Başarıyla Eklendi');
                     heart2.style.backgroundColor = null;
                 });
             }else if (gDrive) {
@@ -520,12 +524,13 @@
         };
         document.getElementById("copy").onclick = function () {
             copyText("Asin ID:" + asin + "\n" + title + "\n");
+            showToast("Asin ID:" + asin + "\n" + title + "\n");
             console.log("Text copied to clipboard:\nListing ID:" + asin + "\n" + title + "\n");
         };
     }
 
 
-    function addHeartsPodly() {
+    function addHeartsPodlyProduct() {
         const bestSellerRank = document.querySelector("#ProductDetails > div:nth-child(1) > div > div.w-full.pt-1\\.5.pl-6.middleBar > div.flex.justify-between.mt-4.min-h-20.dark\\:text-gray-30 > div:nth-child(3) > div.flex.mt-1 > div").textContent.trim();
         const rank = parseInt(bestSellerRank.replace(/,/g, '').replace('#', ''));
         //console.log("rank: ", rank);
@@ -541,7 +546,7 @@
         //console.log("dataAsin1:",asin);
         const tags = Array.from(document.querySelectorAll('.keywords .Tag span')).map(tag => tag.textContent).join(',');
         const tag =removeDuplicateTags(tags);
-        console.log("tags: ",tag);
+        //console.log("tags: ",tag);
 
         let age = daysSince(dateAvailable);
         let url = simplifyAmazonUrl(asin);
@@ -569,16 +574,53 @@
         };
         document.getElementById("copy").onclick = function () {
             copyText("Asin ID:" + asin + "\n" + title + "\n");
+            showToast("Text copied to clipboard:\nListing ID:" + asin + "\n" + title + "\n");
             console.log("Text copied to clipboard:\nListing ID:" + asin + "\n" + title + "\n");
         };
+    }
+
+    function addHeartsPodly() {
+        const productElement = document.querySelectorAll('.product-box-container')
+
+        productElement.forEach((el, index) => {
+            if (!el.querySelector('.heart-icon')) {
+                /*let title = titleElement[index].textContent;
+                let img = imgElement[index].src.replace('._SS60_.jpg', '').replace('._SS40_.jpg', '');
+                let asin = el.textContent.trim();
+                let date = dateElement[index].textContent.trim();
+                let rank = convertToNumber(rankElement[index].textContent.trim());
+                let age = daysSince(date);
+                //console.log(date, age);
+                let url = simplifyAmazonUrl(asin);
+                const heart = createHeartIcon(asin, url, title, img, rank, age, null, null);
+                el.appendChild(heart);*/
+            }
+        });
+    }
+
+    function showToast(message, type = null) {
+        const toast = document.createElement('div');
+        if (type == 'error') {
+            toast.className = 'toast-error';
+        }else{
+            toast.className = 'toast';
+        }
+        toast.innerText = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => toast.classList.add('show'), 100);
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 500);
+        }, 3000);
     }
 
     // Mutation Observer to prevent infinite loops
     const observer = new MutationObserver(mutations => {
         mutations.forEach(mutation => {
             if (mutation.addedNodes.length) {
-                if (window.location.href.includes("/dp/")) {
-                    //addHeartsProduct();
+                if ( window.location.href.includes("search/products") || window.location.href.includes("product-search/trending-search") ) {
+                    addHeartsPodly();
                 } else {
                     addHearts();
                 }
@@ -596,31 +638,76 @@
     if (window.location.href.includes("/dp/")) {
         addHeartsProduct();
     }else if (window.location.href.includes("podly")) {
-        addHeartsPodly();
+        if( window.location.href.includes("search/products") || window.location.href.includes("product-search/trending-search")){
+            addHeartsPodly();
+        }else{
+            addHeartsPodlyProduct()
+        }
     } else {
         addHearts();
     }
 
-    GM_addStyle(`
-  #InfoBalloon {
-   position: fixed;
-   top: 60px; left: 90%;
-   transform: translateX(-50%);
-   background-color: #d6ff00;
-   color: black;
-   border: 1px solid #ccc;
-   border-radius: 5px;
-   padding: 10px;
-   box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-   z-index: 9999;
-  }
-  .heart-icon {
-    /*cursor: pointer;*/
-    color: red;
-    margin-left: 5px;
-  }
-  .heart-icon:hover {
-    transform: scale(1.2);
-  }
+    GM.addStyle(`
+     #InfoBalloon {
+      position: fixed;
+      top: 60px; left: 90%;
+      transform: translateX(-50%);
+      background-color: #d6ff00;
+      color: black;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+      z-index: 9999;
+     }
+     .heart-icon {
+       /*cursor: pointer;*/
+       color: red;
+       margin-left: 5px;
+     }
+     .heart-icon:hover {
+       transform: scale(1.2);
+     }
+    .toast-error {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #ff0000;
+            color: white;
+            text-align: center;
+            border-radius: 5px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1001;
+            bottom: 100px;
+            right: 30px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.5s, visibility 0.5s;
+        }
+        .toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #4CAF50;
+            color: white;
+            text-align: center;
+            border-radius: 5px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1001;
+            bottom: 100px;
+            right: 30px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.5s, visibility 0.5s;
+        }
+        .toast-error.show {
+            visibility: visible;
+            opacity: 1;
+        }
+        .toast.show {
+            visibility: visible;
+            opacity: 1;
+        }
+
  `);
 })();
