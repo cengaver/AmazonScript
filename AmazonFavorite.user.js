@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Amazon Favorite
 // @namespace    https://github.com/cengaver
-// @version      1.36
+// @version      1.38
 // @description  Fvorite list a product on Amazon.
 // @author       Cengaver
 // @match        https://www.amazon.com/dp/*
@@ -500,6 +500,7 @@
        /*cursor: pointer;*/
        color: red;
        margin-left: 5px;
+       font-size: x-large;
      }
      .heart-icon:hover {
        transform: scale(1.2);
@@ -952,13 +953,13 @@
             body = {
                 range: `Liste!D${newRow}:J${newRow}`,
                 majorDimension: "ROWS",
-                values: [[link, img, title, tag, sales, rank, age]]
+                values: [[link, img, title, tag, null, sales, age]]
             };
         } else {
             body = {
                 range: `Liste!F${newRow}:P${newRow}`,
                 majorDimension: "ROWS",
-                values: [[link, img, title, null, config.team, null, tag, null, sales, rank, age]]
+                values: [[link, img, title, null, config.team, null, tag, null, null, sales, age]]
             };
         }
 
@@ -1148,8 +1149,9 @@
         const heartWrapper = document.createElement('div');
         const heart = document.createElement('span');
         heart.className = 'heart-icon';
+        console.log(asin,dnoValue)
         heart.innerHTML = dnoValue ? "❤️" : "🤍";
-        heart.title = dnoValue ? `Design NO: ${dnoValue}` : `Add to List!`;
+        heart.title = dnoValue ? `Design NO: ${dnoValue} : ${title} - ${asin}` : `Add to List! ${title} - ${asin}`;
         heart.style.cursor = "no-drop";
         if (!dnoValue) {
             heart.style.cursor = "pointer";
@@ -1174,7 +1176,7 @@
             //console.log("dnoValue2",dnoValue);
             const heart2 = document.createElement('span');
             heart2.className = 'heart-icon';
-            heart2.innerHTML = dnoValue ? "|✅" : "|⭐";
+            heart2.innerHTML = dnoValue ? "✅" : "⭐";
             heart2.title = dnoValue ? `İstek NO: ${dnoValue}` : `İstek Yap!`;
             heart2.style.cursor = "no-drop";
             if (!dnoValue) {
@@ -1334,58 +1336,130 @@
         };
     }
 
-    function addHeartsPodly() {
-        const productElement = document.querySelectorAll('.product-box-container')
+    let globalProducts = [];
+    function parseProductCard2(el) {
+        const imgEl = el.querySelector(".img-wrapper img");
+        const asin = el.querySelector(".rightBar.min-w-16.max-w-16.sm\\:min-w-48.sm\\:max-w-48.p-2.sm\\:p-4.border-l-1.border-purple-10.dark\\:border-darkPurple-60 > div.hidden.sm\\:flex.label-2.text-gray-40.dark\\:text-gray-20.uppercase.tracking-wider.cursor-pointer.items-center.break-all")?.textContent.replace(/ASIN\s*:/i, "").trim() || null;
+        const ages = el.querySelector(".middleBar.pt-2.sm\\:pt-5.pb-2.pl-2.pr-6.w-full > div.tags.flex.sm\\:items-center.flex-col.sm\\:flex-row.sm\\:flex-wrap > div.text-gray-70.dark\\:text-white.items-center.hidden.sm\\:flex")?.textContent.trim() || null;
+        const age = daysSince(ages);
+        const bestSellerRank = el.querySelector(".ProductCardRow .leading-5.flex.items-center.h-8 span")?.textContent.trim() || null;
+        const rank = parseInt(bestSellerRank?.replace(/,/g, '').replace('#', ''));
+        const sales = el.querySelector(".middleBar.pt-2.sm\\:pt-5.pb-2.pl-2.pr-6.w-full > div.tags.flex.sm\\:items-center.flex-col.sm\\:flex-row.sm\\:flex-wrap > div:nth-child(6) > span")?.textContent.trim() || null;
+        const tag = null;
 
-        productElement.forEach((el, index) => {
-            if (!el.querySelector('.heart-icon')) {
-                /*let title = titleElement[index]?.textContent;
-                let img = imgElement[index].src.replace('._SS60_.jpg', '').replace('._SS40_.jpg', '');
-                let asin = el?.textContent.trim();
-                let date = dateElement[index]?.textContent.trim();
-                let rank = convertToNumber(rankElement[index]?.textContent.trim());
-                let age = daysSince(date);
-                //console.log(date, age);
-                let url = simplifyAmazonUrl(asin);
-                const heart = createHeartIcon(asin, url, title, img, rank, age, null, null);
-                el.appendChild(heart);*/
+        return {
+            asin,
+            url: simplifyAmazonUrl(asin),
+            title: imgEl?.alt || null,
+            img: imgEl?.src || null,
+            rank,
+            age,
+            tag,
+            sales
+        };
+    }
+
+    function parseProductCard(el) {
+        const imgEl = el.querySelector(".img-wrapper img");
+        const match = imgEl.src.match(/\/I\/([A-Z0-9]{10,12})/i);
+        const asin = match ? match[1].slice(0, 10).toUpperCase() : null;
+        const ages =el.querySelector("div.dark\\:text-purple-10.text-gray-70.mt-6.ml-1.text-xs.text-center")?.textContent.trim() || null;
+        const ageMatch = ages?.match(/(\d+)\s*days/);
+        const age = ageMatch ? ageMatch[1] : null;
+        const rank = el.querySelector(".ProductCardRow .leading-5.flex.items-center.h-8 span")?.textContent.trim() || null;
+        const sales = el.querySelector(".ProductCard.t-shirt > div:nth-child(3) > div:nth-child(3) > span")?.textContent.trim() || null;
+        return {
+            asin,
+            url: simplifyAmazonUrl(asin),
+            title: imgEl?.alt || null,
+            img: imgEl?.src || null,
+            rank,
+            age,
+            tag: null,
+            sales
+        };
+    }
+
+    function addHeartsPodly2() {
+        const productElements = document.querySelectorAll('.ProductCard2Container');
+
+        productElements.forEach(el => {
+            if (el.querySelector('.heart-icon')) return;
+            const p = parseProductCard2(el);
+            const target = el.querySelector('.ProductCard2.t-shirt');
+            if (target) {
+                const heart = createHeartIcon(...Object.values(p));
+                target.appendChild(heart);
+            } else {
+                setTimeout(() => {
+                    const retryTarget = el.querySelector('.ProductCard2.t-shirt');
+                    if (retryTarget && !el.querySelector('.heart-icon')) {
+                        const heart = createHeartIcon(...Object.values(p));
+                        retryTarget.appendChild(heart);
+                    }
+                }, 300);
             }
+            if (globalProducts.some(prod => prod.asin === p.asin)) return;
+
+            globalProducts.push(p);
         });
     }
 
-    // Mutation Observer to prevent infinite loops
-    const observer = new MutationObserver(mutations => {
-        mutations.forEach(mutation => {
-            if (mutation.addedNodes.length) {
-                if ( window.location.href.includes("search/products") || window.location.href.includes("product-search/trending-search") ) {
-                    addHeartsPodly();
-                } else {
-                    addHearts();
-                }
-            }
-        });
-    });
+    function addHeartsPodly() {
+        const productElements = document.querySelectorAll('.product-box-card-container');
 
-    observer.observe(document.body, { childList: true, subtree: true });
+        productElements.forEach(el => {
+            if (el.querySelector('.heart-icon')) return;
+            const p = parseProductCard(el);
+            const target = el.querySelector('.ProductCard.t-shirt');
+            if (target) {
+                const heart = createHeartIcon(...Object.values(p));
+                target.appendChild(heart);
+            } else {
+                setTimeout(() => {
+                    const retryTarget = el.querySelector('.ProductCard.t-shirt');
+                    if (retryTarget && !el.querySelector('.heart-icon')) {
+                        const heart = createHeartIcon(...Object.values(p));
+                        retryTarget.appendChild(heart);
+                    }
+                }, 4000);
+            }
+            if (globalProducts.some(prod => prod.asin === p.asin)) return;
+
+            globalProducts.push(p);
+        });
+    }
+
+    function observeProducts() {
+        const container = document.querySelector('body'); // veya üst parent
+        const observer = new MutationObserver(() => {
+            const productElements2 = document.querySelector(".ProductCard2Container");
+            const productElements = document.querySelector(".product-box-container");
+            if (productElements2) addHeartsPodly2();
+            //if (productElements) addHeartsPodly();
+        });
+        observer.observe(container, { childList: true, subtree: true });
+    }
+
     await fetchColumnData();
     if(config.sheetId2!==""){
         await fetchColumnData(2);
     }
 
     async function Init() {
-        // Initial call based on the current page
         if (window.location.href.includes("/dp/")) {
             addHeartsProduct();
-        }else if (window.location.href.includes("podly")) {
-            if( window.location.href.includes("search/products") || window.location.href.includes("product-search/trending-search")){
-                addHeartsPodly();
-            }else{
-                addHeartsPodlyProduct()
+        } else if (window.location.href.includes("podly")) {
+            if (window.location.href.includes("search/products") || window.location.href.includes("product-search/trending-search")) {
+                observeProducts();
+            } else {
+                addHeartsPodlyProduct();
             }
         } else {
             addHearts();
         }
     }
+
     // Initialize
     async function initialize() {
         // Load config
